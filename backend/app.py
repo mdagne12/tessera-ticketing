@@ -51,6 +51,45 @@ def get_events():
     
     return jsonify(events_list)
 
+@app.route('/user', methods=['POST'])
+def create_user():
+    # Extract email, username, and password from the JSON payload
+    email = request.json.get('email')
+    username = request.json.get('username')
+    password = request.json.get('password')
+
+    # Basic validation to ensure all fields are provided
+    if not email or not username or not password:
+        return jsonify({'error': 'All fields (email, username, and password) are required.'}), 400
+
+    # Hash the password
+    hashed_password = generate_password_hash(password)
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Attempt to insert the new user into the Users table
+        cursor.execute('INSERT INTO Users (email, username, password_hash) VALUES (?, ?, ?)',
+                       (email, username, hashed_password))
+        conn.commit()  # Commit the changes to the database
+
+        # Retrieve the user_id of the newly created user to confirm creation
+        cursor.execute('SELECT user_id FROM Users WHERE username = ?', (username,))
+        new_user_id = cursor.fetchone()
+
+        conn.close()
+
+        return jsonify({'message': 'User created successfully', 'user_id': new_user_id['user_id']}), 201
+
+    except sqlite3.IntegrityError:
+        return jsonify({'error': 'Username or email already exists.'}), 409
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
+
 
 
 
