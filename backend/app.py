@@ -12,6 +12,24 @@ def get_db_connection():
   return conn
 
 # When asked, add code in this area
+def validate_user_credentials(username, password):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Attempt to retrieve the user from the db
+    cursor.execute('SELECT password_hash FROM Users WHERE username = ?', (username,))
+    password_hash = cursor.fetchone()[0]
+    print(password_hash)
+
+    print(check_password_hash(password_hash, password))
+
+    # If no such username exists in our system or the password is incorrect we will return 401 Error code
+    if not password_hash or not check_password_hash(password_hash, password):
+        return False
+
+    return True
+
+
 
 @app.route('/events', methods=['GET'])
 def get_events():
@@ -88,7 +106,7 @@ def create_user():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/login', methods=['GET'])
-def validate_user():
+def check_login():
     # Extract username, and password from the JSON body
     username = request.json.get('username')
     password = request.json.get('password')
@@ -97,25 +115,18 @@ def validate_user():
         return jsonify({'error:' : 'All fields (username, and password) are required.'}), 400
 
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        # Attempt to retrieve the user from the db
-        cursor.execute('SELECT password_hash FROM Users WHERE username = ?', (username,))
-        password_hash = cursor.fetchone()[0]
-        print(password_hash)
-
-        print(check_password_hash(password_hash, password))
-
-        # If no such username exists in our system or the password is incorrect we will return 401 Error code
-        if not password_hash or not check_password_hash(password_hash, password):
+        if validate_user_credentials(username, password):
+            return jsonify({'message': 'Valid user credentials'}), 200
+        else:
             return jsonify({'error:' : 'Incorrect login information'}), 401
-
-        return jsonify({'message': 'Valid user credentials'}), 200
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+# @app.route('/login/username', methods=['PUT'])
+# def change_username():
+#     # Extract email, password and new username
 
 
 
