@@ -13,22 +13,27 @@ def get_db_connection():
 
 # When asked, add code in this area
 def validate_user_credentials(username, password):
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
 
-    # Attempt to retrieve the user from the db
-    cursor.execute('SELECT password_hash FROM Users WHERE username = ?', (username,))
-    password_hash = cursor.fetchone()[0]
-    print(password_hash)
+        # Attempt to retrieve the user from the db
+        cursor.execute('SELECT password_hash FROM Users WHERE username = ?', (username,))
 
-    print(check_password_hash(password_hash, password))
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return False
 
-    # If no such username exists in our system or the password is incorrect we will return 401 Error code
-    if not password_hash or not check_password_hash(password_hash, password):
-        return False
+        password_hash = row[0]
 
-    return True
+        # If no such username exists in our system or the password is incorrect we will return 401 Error code
+        if not check_password_hash(password_hash, password):
+            return False
 
+        return True
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/events', methods=['GET'])
@@ -124,13 +129,88 @@ def check_login():
         return jsonify({'error': str(e)}), 500
 
 
-# @app.route('/login/username', methods=['PUT'])
-# def change_username():
-#     # Extract email, password and new username
+@app.route('/login/username', methods=['PUT'])
+def change_username():
+    # Extract email, password and new username
+    email = request.json.get('email')
+    password = request.json.get('password')
+    new_username = request.json.get('new_username')
+
+    if not email or not password or not new_username:
+        return jsonify({'error': 'Must provide an email password and new username'}), 400
+
+    try: 
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT username FROM Users WHERE email = ?", (email,))
+        username = cursor.fetchone()[0]
+
+        if username == None:
+            conn.close()
+            return jsonify({'error': 'There are no users associated with that email'}), 400
+        
+        if validate_user_credentials(username, password):
+            cursor.execute("UPDATE Users SET username = ? WHERE email = ?", (new_username, email))
+            conn.commit()  # Commit the changes to the database
+            conn.close()
+            return jsonify({'message': 'Username successfully changed'}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 
+@app.route('/login/email', methods=['PUT'])
+def change_email():
+    # Extract username, password, and new email
+    new_email = request.json.get('new_email')
+    password = request.json.get('password')
+    username = request.json.get('username')
 
+    if not username or not password or not new_email:
+        return jsonify({'error': 'Must provide an username, password, and new email'}), 400
+
+    try: 
+        
+        if validate_user_credentials(username, password):
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            cursor.execute("UPDATE Users SET email = ? WHERE username = ?", (new_email, username))
+            conn.commit()  # Commit the changes to the database
+            conn.close()
+
+            return jsonify({'message': 'Email successfully changed'}), 200
+        else:
+            return jsonify({'error': 'Invalid user credentials'}), 400
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
+@app.route('/user', methods=['DELETE'])
+def delete_user():
+    # Extract email, password and new username
+    password = request.json.get('password')
+    username = request.json.get('username')
+
+    try: 
+        if validate_user_credentials(username, password):
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            cursor.execute("DELETE FROM Users WHERE username = ?", (username,))
+            conn.commit()
+            conn.close()
+            return jsonify({'message': 'User successfully deleted'}), 200
+        else:
+            return jsonify({'error': 'Invalid user credentials'}), 400
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+        
 
 
 if __name__ == '__main__':
