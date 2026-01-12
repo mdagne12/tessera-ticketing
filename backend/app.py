@@ -268,6 +268,23 @@ def create_event():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/emails', methods=['GET'])
+def get_all_emails():
+    try: 
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT email FROM Users')
+
+        emails = cursor.fetchall()
+        conn.close()
+        
+        emails_list = [email[0] for email in emails]
+        return jsonify(emails_list)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
 
 if __name__ == '__main__':
     app.run(debug=True)
