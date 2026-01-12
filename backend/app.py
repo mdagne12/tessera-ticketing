@@ -188,6 +188,35 @@ def change_email():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/login/password', methods=['PUT'])
+def change_email():
+    # Extract username, password, and new email
+    old_password = request.json.get('old_password')
+    new_password = request.json.get('new_password')
+    username = request.json.get('username')
+
+    # User must provide either username or email whichever they are choosing to change, as well as the new one they want to replace it with
+    # User must also provide a password to ensure they have the authority to make that change.
+    if not old_password or not new_password or not username:
+        return jsonify({'error': 'Must provide an old password, new password and username'}), 400
+
+    try: 
+        if validate_user_credentials(username, password):
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            new_password_hash = generate_password_hash(new_password)
+
+            cursor.execute("UPDATE Users SET password = ? WHERE username = ?", (new_password, username))
+            conn.commit()  # Commit the changes to the database
+            conn.close()
+
+            return jsonify({'message': 'Password successfully changed'}), 200
+        else:
+            return jsonify({'error': 'Invalid user credentials'}), 400
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/user', methods=['DELETE'])
