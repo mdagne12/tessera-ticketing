@@ -240,7 +240,33 @@ def delete_user():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
         
+@app.route('event', methods = ['POST'])
+def create_event():
+    # Extract event name, description, location, date and time
+    description = request.json.get('description')
+    location = request.json.get('location')
+    name = request.json.get('name')
+    time = request.json.get('time')
+    date = request.json.get('date')
 
+
+    if not (name and description and location and event_date and event_time):
+        return jsonify({'error': 'Must provide a name, description, location, event_date and event_time'}), 400
+
+    try: 
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        event_date = datetime.strptime(date, "%Y-%m-%d").date()
+        event_time = datetime.strptime(time, "%H:%M").time()
+
+        cursor.execute('INSERT INTO Events (name, description, date, time, location) VALUES (?, ?, ?)',
+                       (name, description, event_date, event_time, location))
+        conn.commit()  # Commit the changes to the database
+        return jsonify({'message': 'Event successfully added'}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':
