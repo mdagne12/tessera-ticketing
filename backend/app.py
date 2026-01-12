@@ -2,8 +2,10 @@ from flask import Flask, jsonify, make_response, request # Importing the Flask l
 import sqlite3 # Library for talking to our database
 from datetime import datetime # We'll be working with dates 
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_cors import CORS
 
 app = Flask(__name__) # Creating a new Flask app. This will help us create API endpoints hiding the complexity of writing network code!
+CORS(app)  # Enable CORS for all routes
 
 # This function returns a connection to the database which can be used to send SQL commands to the database
 def get_db_connection():
