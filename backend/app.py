@@ -207,7 +207,7 @@ def change_email():
 
             new_password_hash = generate_password_hash(new_password)
 
-            cursor.execute("UPDATE Users SET password = ? WHERE username = ?", (new_password, username))
+            cursor.execute("UPDATE Users SET password = ? WHERE username = ?", (new_password_hash, username))
             conn.commit()  # Commit the changes to the database
             conn.close()
 
@@ -240,6 +240,7 @@ def delete_user():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
         
+
 
 
 if __name__ == '__main__':
