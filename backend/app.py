@@ -189,7 +189,7 @@ def change_email():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/login/password', methods=['PUT'])
-def change_email():
+def change_password():
     # Extract username, password, and new email
     old_password = request.json.get('old_password')
     new_password = request.json.get('new_password')
@@ -240,7 +240,7 @@ def delete_user():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
         
-@app.route('event', methods = ['POST'])
+@app.route('/event', methods = ['POST'])
 def create_event():
     # Extract event name, description, location, date and time
     description = request.json.get('description')
