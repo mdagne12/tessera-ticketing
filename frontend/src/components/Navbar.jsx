@@ -1,5 +1,7 @@
 import React from 'react';
 import { Box, Flex, Text, Button, Spacer } from '@chakra-ui/react';
+import { Icon } from '@chakra-ui/react'
+import { BsPersonCircle } from "react-icons/bs";
 
 function Navbar() {
   return (
@@ -9,7 +11,7 @@ function Navbar() {
       </Box>
       <Spacer />
       <Box>
-        <Button colorScheme="blue" variant="outline">Profile</Button>
+        <Icon as={BsPersonCircle} boxSize="9" />
       </Box>
     </Flex>
   );
