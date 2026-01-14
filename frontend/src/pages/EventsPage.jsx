@@ -6,7 +6,11 @@ function EventsPage() {
   const [events, setEvents] = useState([]);
 
   useEffect(() => {
-    fetch('http://localhost:5000/events')
+    const params = new URLSearchParams();
+    const now = new Date().toISOString().split('T')[0];
+
+    params.append("afterDate", now);
+    fetch(`http://localhost:5000/events?afterDate=${now}`)
       .then(response => response.json())
       .then(setEvents)
       .catch(error => console.error('Error fetching events:', error));
