@@ -4,8 +4,22 @@ from datetime import datetime # We'll be working with dates
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_cors import CORS
 
+from flask import Flask
+from flask import jsonify
+from flask import request
+
+from flask_jwt_extended import create_access_token
+from flask_jwt_extended import get_jwt_identity
+from flask_jwt_extended import jwt_required
+from flask_jwt_extended import JWTManager
+from datetime import timedelta
+
 app = Flask(__name__) # Creating a new Flask app. This will help us create API endpoints hiding the complexity of writing network code!
 CORS(app)  # Enable CORS for all routes
+
+# Setup the Flask-JWT-Extended extension
+app.config["JWT_SECRET_KEY"] = "super-secret"  # Change this!
+jwt = JWTManager(app)
 
 # This function returns a connection to the database which can be used to send SQL commands to the database
 def get_db_connection():
@@ -123,7 +137,18 @@ def check_login():
 
     try:
         if validate_user_credentials(username, password):
-            return jsonify({'message': 'Valid user credentials'}), 200
+            # Establish database connection to retrieve additional user info
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            # Get user_id and role for the JWT claims
+            cursor.execute("SELECT user_id, role FROM Users WHERE username = ?", (username,))
+            user_id, role = cursor.fetchone()
+            conn.close()
+
+            additional_claims = {"username": username, "role": role}
+            access_token = create_access_token(identity=user_id, additional_claims=additional_claims, expires_delta=timedelta(days=1))
+            return jsonify(access_token=access_token), 200
         else:
             return jsonify({'error:' : 'Incorrect login information'}), 401
 
