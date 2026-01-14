@@ -10,12 +10,14 @@ from flask import request
 
 from flask_jwt_extended import create_access_token
 from flask_jwt_extended import get_jwt_identity
+from flask_jwt_extended import get_jwt
 from flask_jwt_extended import jwt_required
 from flask_jwt_extended import JWTManager
 from datetime import timedelta
 
 app = Flask(__name__) # Creating a new Flask app. This will help us create API endpoints hiding the complexity of writing network code!
 CORS(app)  # Enable CORS for all routes
+app.config['JWT_VERIFY_SUB'] = False
 
 # Setup the Flask-JWT-Extended extension
 app.config["JWT_SECRET_KEY"] = "super-secret"  # Change this!
@@ -146,8 +148,8 @@ def check_login():
             user_id, role = cursor.fetchone()
             conn.close()
 
-            additional_claims = {"username": username, "role": role}
-            access_token = create_access_token(identity=user_id, additional_claims=additional_claims, expires_delta=timedelta(days=1))
+            additional_claims = {"username": str(username), "role":  str(role)}
+            access_token = create_access_token(identity=str(user_id), additional_claims=additional_claims, expires_delta=timedelta(days=1))
             return jsonify(access_token=access_token), 200
         else:
             return jsonify({'error:' : 'Incorrect login information'}), 401
@@ -295,9 +297,16 @@ def create_event():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 @app.route('/emails', methods=['GET'])
+@jwt_required()
 def get_all_emails():
+
     try: 
+        claims = get_jwt()
+        if claims['role'] != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+
         conn = get_db_connection()
         cursor = conn.cursor()
 
@@ -311,6 +320,7 @@ def get_all_emails():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
     
 
 if __name__ == '__main__':
