@@ -269,35 +269,6 @@ def delete_user():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
         
-@app.route('/event', methods = ['POST'])
-def create_event():
-    # Extract event name, description, location, date and time
-    description = request.json.get('description')
-    location = request.json.get('location')
-    name = request.json.get('name')
-    time = request.json.get('time')
-    date = request.json.get('date')
-
-
-    if not (name and description and location and event_date and event_time):
-        return jsonify({'error': 'Must provide a name, description, location, event_date and event_time'}), 400
-
-    try: 
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        event_date = datetime.strptime(date, "%Y-%m-%d").date()
-        event_time = datetime.strptime(time, "%H:%M").time()
-
-        cursor.execute('INSERT INTO Events (name, description, date, time, location) VALUES (?, ?, ?)',
-                       (name, description, event_date, event_time, location))
-        conn.commit()  # Commit the changes to the database
-        return jsonify({'message': 'Event successfully added'}), 200
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
 @app.route('/emails', methods=['GET'])
 @jwt_required()
 def get_all_emails():
@@ -321,7 +292,39 @@ def get_all_emails():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-    
+@app.route('/events', methods=['POST'])
+@jwt_required()
+def create_event():
+
+    claims = get_jwt()
+    if claims['role'] != 'admin':
+        return jsonify({'error': 'Admin access required'}), 403
+
+    # Extract event name, description, location, date and time
+    description = request.json.get('description')
+    location = request.json.get('location')
+    name = request.json.get('name')
+    time = request.json.get('time')
+    date = request.json.get('date')
+    url = request.json.get('url')
+
+    if not (name and description and location and date and time and url):
+        return jsonify({'error': 'Must provide a name, description, location, date, time and url'}), 400
+
+    try: 
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        event_date = datetime.strptime(date, "%Y-%m-%d").date()
+        event_time = datetime.strptime(time, "%H:%M").time()
+
+        cursor.execute('INSERT INTO Events (name, description, date, time, location, url) VALUES (?, ?, ?, ?, ?, ?)',
+                       (name, description, event_date, event_time, location, url))
+        conn.commit()  # Commit the changes to the database
+        return jsonify({'message': 'Event successfully added'}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
