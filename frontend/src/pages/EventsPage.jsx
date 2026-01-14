@@ -22,6 +22,7 @@ function EventsPage() {
             name={event.name}
             description={event.description}
             date={event.date}
+            time={event.time}
             location={event.location}
             imageUrl={event.image_url} 
           />
