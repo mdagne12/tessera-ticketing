@@ -326,5 +326,68 @@ def create_event():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/create_ticket', methods=['POST'])
+@jwt_required()
+def create_ticket():
+    claims = get_jwt()
+    if claims['role'] != 'admin':
+        return jsonify({'error': 'Admin access required'}), 403
+
+    # Extract ticket details
+    event_id = request.json.get('event_id')
+    price = request.json.get('price')
+    quantity = request.json.get('quantity')
+
+    if not (event_id and price and quantity):
+        return jsonify({'error': 'Must provide an event_id, price, and quantity'}), 400
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        for _ in range(quantity):
+            cursor.execute('INSERT INTO Tickets (event_id, price, status) VALUES (?, ?, ?)',
+                           (event_id, price, 'available'))
+        conn.commit()
+        return jsonify({'message': 'Ticket successfully created'}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/buy_ticket', methods=['POST'])
+@jwt_required()
+def buy_ticket():
+    user_id = get_jwt_identity()
+
+    # Extract ticket details
+    event_id = request.json.get('event_id')
+
+    if not event_id:
+        return jsonify({'error': 'Must provide an event_id'}), 400
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Find an available ticket for the specified event
+        cursor.execute('SELECT ticket_id FROM Tickets WHERE event_id = ? AND status = ? LIMIT 1',
+                       (event_id, 'available'))
+        ticket = cursor.fetchone()
+
+        if not ticket:
+            return jsonify({'error': 'No available tickets for this event'}), 404
+
+        ticket_id = ticket['ticket_id']
+
+        # Update the ticket status to 'sold' and associate it with the user
+        cursor.execute('UPDATE Tickets SET status = ?, user_id = ? WHERE ticket_id = ?',
+                       ('sold', user_id, ticket_id))
+        conn.commit()
+        return jsonify({'message': 'Ticket successfully purchased', 'ticket_id': ticket_id}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     app.run(debug=True)
