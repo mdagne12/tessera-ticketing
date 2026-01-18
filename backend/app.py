@@ -121,41 +121,67 @@ def create_user():
 
         conn.close()
 
-        return jsonify({'message': 'User created successfully', 'user_id': new_user_id['user_id']}), 201
+        additional_claims = {
+                "username": username,
+                "role": "user"
+            }
+
+        access_token = create_access_token(
+            identity=str(new_user_id),
+            additional_claims=additional_claims,
+            expires_delta=timedelta(days=1)
+        )
+
+        return jsonify(access_token=access_token), 200
 
     except sqlite3.IntegrityError:
         return jsonify({'error': 'Username or email already exists.'}), 409
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/login', methods=['GET'])
+@app.route('/login', methods=['POST'])
 def check_login():
-    # Extract username, and password from the JSON body
-    username = request.json.get('username')
-    password = request.json.get('password')
+    data = request.get_json()
+
+    if not data:
+        return jsonify({'error': 'Missing JSON body'}), 400
+
+    username = data.get('username')
+    password = data.get('password')
 
     if not (username and password):
-        return jsonify({'error:' : 'All fields (username, and password) are required.'}), 400
+        return jsonify({'error': 'All fields are required'}), 400
 
     try:
         if validate_user_credentials(username, password):
-            # Establish database connection to retrieve additional user info
             conn = get_db_connection()
             cursor = conn.cursor()
 
-            # Get user_id and role for the JWT claims
-            cursor.execute("SELECT user_id, role FROM Users WHERE username = ?", (username,))
+            cursor.execute(
+                "SELECT user_id, role FROM Users WHERE username = ?",
+                (username,)
+            )
             user_id, role = cursor.fetchone()
             conn.close()
 
-            additional_claims = {"username": str(username), "role":  str(role)}
-            access_token = create_access_token(identity=str(user_id), additional_claims=additional_claims, expires_delta=timedelta(days=1))
+            additional_claims = {
+                "username": username,
+                "role": role
+            }
+
+            access_token = create_access_token(
+                identity=str(user_id),
+                additional_claims=additional_claims,
+                expires_delta=timedelta(days=1)
+            )
+
             return jsonify(access_token=access_token), 200
         else:
-            return jsonify({'error:' : 'Incorrect login information'}), 401
+            return jsonify({'error': 'Incorrect login information'}), 401
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
 
 @app.route('/login/username', methods=['PUT'])
