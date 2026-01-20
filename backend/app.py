@@ -611,8 +611,8 @@ def reserve_seat(event_id, row_name, seat_number):
     try:
         cur.execute("""
             UPDATE Tickets
-            SET status = 'RESERVED'
-            SET reservation_time = CURRENT_TIMESTAMP
+            SET status = 'RESERVED',
+            reservation_time = CURRENT_TIMESTAMP
             WHERE event_id = ? AND row_name = ? AND seat_number = ?
         """, (event_id, row_name, seat_number))
 
@@ -637,8 +637,8 @@ def unreserve_seat(event_id, row_name, seat_number):
     try:
         cur.execute("""
             UPDATE Tickets
-            SET status = 'AVAILABLE'
-            SET reservation_time = NULL
+            SET status = 'AVAILABLE',
+            reservation_time = NULL
             WHERE event_id = ? AND row_name = ? AND seat_number = ?
         """, (event_id, row_name, seat_number))
 
