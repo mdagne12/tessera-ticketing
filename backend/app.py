@@ -14,6 +14,7 @@ from flask_jwt_extended import get_jwt
 from flask_jwt_extended import jwt_required
 from flask_jwt_extended import JWTManager
 from datetime import timedelta
+import uuid
 
 app = Flask(__name__) # Creating a new Flask app. This will help us create API endpoints hiding the complexity of writing network code!
 CORS(app)  # Enable CORS for all routes
@@ -39,7 +40,7 @@ def validate_user_credentials(username, password):
         cursor.execute('SELECT password_hash FROM Users WHERE username = ?', (username,))
 
         row = cursor.fetchone()
-        conn.close()
+        conn.close() 
         if not row:
             return False
 
@@ -468,6 +469,190 @@ def check_auth():
     }), 200
 
 
+@app.route('/get_all_tickets', methods=['GET'])
+def get_all_tickets():
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM Tickets")
+    tickets = cur.fetchall()
+
+    conn.close()
+
+    return jsonify({"tickets": [dict(ticket) for ticket in tickets]}), 200
+
+@app.route("/events/add-tickets", methods=["POST"])
+def add_tickets():
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        conn.execute("PRAGMA foreign_keys = OFF")
+
+        ROWS = ["A", "B", "C", "D", "E"]
+        SEATS_PER_ROW = 5
+
+        for event_id in range(1, 13):
+            tickets = []
+            for row in ROWS:
+                for seat in range(1, SEATS_PER_ROW + 1):
+                    barcode = str(uuid.uuid4())  # unique barcode
+                    tickets.append((event_id, row, seat, "AVAILABLE", barcode))
+
+                # Insert tickets; ignore if already exist
+                cur.executemany("""
+                    INSERT OR IGNORE INTO Tickets
+                    (event_id, row_name, seat_number, status, barcode)
+                    VALUES (?, ?, ?, ?, ?)
+                """, tickets)
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            "message": "Tickets added successfully",
+            "total_tickets_attempted": len(tickets)
+        }), 201
+    except Exception as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/add_ticket_prices', methods=['POST'])
+def add_ticket_prices():
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        # Define ticket prices for each event
+        ticket_prices = [
+            (1, 100), (2, 150), (3, 200), (4, 250), (5, 300),
+            (6, 350), (7, 400), (8, 450), (9, 500), (10, 550),
+            (11, 600), (12, 650)
+        ]
+
+        # Insert ticket prices into the database
+        cur.executemany("""
+            INSERT OR IGNORE INTO TicketPrices
+            (event_id, price)
+            VALUES (?, ?)
+        """, ticket_prices)
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            "message": "Ticket prices added successfully"
+        }), 201
+    except Exception as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/set_prices/<int:event_id>/<int:max_price_dollars>', methods=['POST'])
+def set_prices(event_id, max_price_dollars):
+    max_price_cents = max_price_dollars * 100
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    ROWS = ['A', 'B', 'C', 'D', 'E']
+    PRICE_DECREMENT_CENTS = 2000  # $10.00 decrement per row
+
+    for i, row in enumerate(ROWS):
+        price_cents = max_price_cents - (i * PRICE_DECREMENT_CENTS)
+        if price_cents < 0:
+            price_cents = 0  # don't go negative
+
+        cur.execute("""
+            INSERT INTO Ticket_Prices (event_id, row_name, price_cents)
+            VALUES (?, ?, ?)
+        """, (event_id, row, price_cents))
+
+        print(f"Set price for Event {event_id} Row {row}: ${price_cents/100:.2f}")
+
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Prices set successfully"}), 200
+
+
+@app.route('/get_ticket_availability/<int:event_id>', methods=['GET'])
+@jwt_required()
+def get_ticket_availability(event_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT row_name, seat_number, status
+        FROM Tickets
+        WHERE event_id = ?
+    """, (event_id,))
+
+    event_seats = cur.fetchall()
+    conn.close()
+
+    # Build nested dictionary: {row_name: {seat_number: availability}}
+    availability_dict = {}
+    for seat in event_seats:
+        row = seat['row_name']
+        seat_num = seat['seat_number']
+        avail = seat['status']  
+
+        if row not in availability_dict:
+            availability_dict[row] = {}
+
+        availability_dict[row][seat_num] = avail
+
+    return jsonify(availability_dict), 200
+
+@app.route('/reserve_seat/<int:event_id>/<string:row_name>/<int:seat_number>', methods=['PUT'])
+@jwt_required()
+def reserve_seat(event_id, row_name, seat_number):
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            UPDATE Tickets
+            SET status = 'RESERVED'
+            SET reservation_time = CURRENT_TIMESTAMP
+            WHERE event_id = ? AND row_name = ? AND seat_number = ?
+        """, (event_id, row_name, seat_number))
+
+        if cur.rowcount == 0:
+            conn.close()
+            return jsonify({"error": "Seat not found or already reserved"}), 404
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({"message": "Seat reserved successfully"}), 200
+    except Exception as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/unreserve_seat/<int:event_id>/<string:row_name>/<int:seat_number>', methods=['PUT'])
+@jwt_required()
+def unreserve_seat(event_id, row_name, seat_number):
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            UPDATE Tickets
+            SET status = 'AVAILABLE'
+            SET reservation_time = NULL
+            WHERE event_id = ? AND row_name = ? AND seat_number = ?
+        """, (event_id, row_name, seat_number))
+
+        if cur.rowcount == 0:
+            conn.close()
+            return jsonify({"error": "Seat not found or already available"}), 404
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({"message": "Seat unreserved successfully"}), 200
+    except Exception as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
