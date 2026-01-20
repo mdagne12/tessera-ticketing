@@ -43,7 +43,7 @@ function EventCard({ id, name, date, time, description, location, imageUrl }) {
           <Text fontSize="sm">Location: {location}</Text>
           <Text fontSize="sm">Date: {date}</Text>
           <Text fontSize="sm" color="red.500">{timeLeft} </Text>
-          <Text fontSize="sm" noOfLines={3}>{description}</Text>
+          <Text fontSize="sm" noOfLines={2}>{description}</Text>
           <Button colorScheme="blue" mt="4" as={Link} to={`/events/${id}`}>
             Buy Tickets!
           </Button>

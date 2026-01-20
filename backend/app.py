@@ -58,39 +58,65 @@ def validate_user_credentials(username, password):
 def get_events():
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Start with the base SQL query
-    query = 'SELECT * FROM Events'
-    query_conditions = []
-    params = []
-    
-    # Check if the 'afterDate' parameter is provided in the query string
-    after_date = request.args.get('afterDate')
 
+    # Query params
+    after_date = request.args.get('afterDate')
+    location = request.args.get('location')
+    search = request.args.get('search')
+
+    page = int(request.args.get('page', 1))
+    limit = int(request.args.get('limit', 6))
+    offset = (page - 1) * limit
+
+    base_query = "FROM Events"
+    conditions = []
+    params = []
+
+    # Filters
     if after_date:
-        query_conditions.append('date > ?')
+        conditions.append("date > ?")
         params.append(after_date)
 
-    location = request.args.get('location')
-
     if location:
-        query_conditions.append('location = ?')
+        conditions.append("location = ?")
         params.append(location)
 
-    if query_conditions:
-        query += ' WHERE ' + ' AND '.join(query_conditions)
+    if search:
+        conditions.append(
+            "(name LIKE ? OR location LIKE ?)"
+        )
+        search_term = f"%{search}%"
+        params.extend([search_term, search_term])
 
-    
-    # Execute the query with or without the date filter
-    cursor.execute(query, params)
+    if conditions:
+        base_query += " WHERE " + " AND ".join(conditions)
+
+    # Total count (for pagination)
+    count_query = f"SELECT COUNT(*) {base_query}"
+    cursor.execute(count_query, params)
+    total_events = cursor.fetchone()[0]
+
+    # Paginated query
+    events_query = f"""
+        SELECT *
+        {base_query}
+        ORDER BY date ASC
+        LIMIT ? OFFSET ?
+    """
+
+    cursor.execute(events_query, params + [limit, offset])
     events = cursor.fetchall()
-    
-    # Convert the rows to dictionaries to make them serializable
-    events_list = [dict(event) for event in events]
-    
+
     conn.close()
-    
-    return jsonify(events_list)
+
+    return jsonify({
+        "events": [dict(event) for event in events],
+        "page": page,
+        "limit": limit,
+        "total": total_events,
+        "totalPages": (total_events + limit - 1) // limit
+    }), 200
+
 
 @app.route('/user', methods=['POST'])
 def create_user():
@@ -98,10 +124,12 @@ def create_user():
     email = request.json.get('email')
     username = request.json.get('username')
     password = request.json.get('password')
+    first_name = request.json.get('first_name')
+    last_name = request.json.get('last_name')
 
     # Basic validation to ensure all fields are provided
-    if not email or not username or not password:
-        return jsonify({'error': 'All fields (email, username, and password) are required.'}), 400
+    if not email or not username or not password or not first_name or not last_name:
+        return jsonify({'error': 'All fields (email, username, password, first_name, and last_name) are required.'}), 400
 
     # Hash the password
     hashed_password = generate_password_hash(password)
@@ -111,19 +139,23 @@ def create_user():
         cursor = conn.cursor()
         
         # Attempt to insert the new user into the Users table
-        cursor.execute('INSERT INTO Users (email, username, password_hash) VALUES (?, ?, ?)',
-                       (email, username, hashed_password))
+        cursor.execute('INSERT INTO Users (email, first_name, last_name, username, password_hash) VALUES (?, ?, ?, ?, ?)',
+                       (email, first_name, last_name, username, hashed_password))
         conn.commit()  # Commit the changes to the database
 
         # Retrieve the user_id of the newly created user to confirm creation
         cursor.execute('SELECT user_id FROM Users WHERE username = ?', (username,))
-        new_user_id = cursor.fetchone()
+        new_user_id = cursor.fetchone()[0]
 
         conn.close()
 
         additional_claims = {
                 "username": username,
-                "role": "user"
+                "role": "user",
+                "email": email,
+                "first_name": first_name,
+                "last_name": last_name,
+                "avatar": None
             }
 
         access_token = create_access_token(
@@ -158,15 +190,19 @@ def check_login():
             cursor = conn.cursor()
 
             cursor.execute(
-                "SELECT user_id, role FROM Users WHERE username = ?",
+                "SELECT user_id, role, first_name, last_name, email, avatar FROM Users WHERE username = ?",
                 (username,)
             )
-            user_id, role = cursor.fetchone()
+            user_id, role, first_name, last_name, email, avatar = cursor.fetchone()
             conn.close()
 
             additional_claims = {
                 "username": username,
-                "role": role
+                "role": role,
+                "email": email,
+                "first_name": first_name,
+                "last_name": last_name,
+                "avatar": avatar
             }
 
             access_token = create_access_token(
@@ -413,6 +449,24 @@ def buy_ticket():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/auth/check', methods=['GET'])
+@jwt_required()
+def check_auth():
+    user_id = get_jwt_identity()
+    claims = get_jwt()
+
+    return jsonify({
+        'authenticated': True,
+        'user_id': user_id,
+        'username': claims.get('username'),
+        'role': claims.get('role'),
+        'email': claims.get('email'),
+        'first_name': claims.get('first_name'),
+        'last_name': claims.get('last_name'),
+        'avatar': claims.get('avatar')
+    }), 200
+
 
 
 if __name__ == '__main__':

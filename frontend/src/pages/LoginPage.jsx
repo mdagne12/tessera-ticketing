@@ -21,9 +21,12 @@ const Login = () => {
     const [email, setEmail] = React.useState('');
     const [username, setUsername] = React.useState('');
     const [password, setPassword] = React.useState('');
+    const [firstName, setFirstName] = React.useState('');
+    const [lastName, setLastName] = React.useState('');
     const [loading, setLoading] = React.useState(false);
-     const navigate = useNavigate();
-     const [errorMessage, setErrorMessage] = useState('');
+    const navigate = useNavigate();
+    const [errorMessage, setErrorMessage] = useState('');
+
 
     const handleSubmit = async () => {
     setLoading(true);
@@ -34,7 +37,7 @@ const Login = () => {
 
         const payload = isLogin
             ? { "username": username, "password":password }
-            : { "email": email, "username": username, "password":password };
+            : { "email": email, "username": username, "password":password, "first_name": firstName, "last_name": lastName };
 
         const response = await fetch("http://localhost:5000"+ endpoint, {
             method: 'POST',
@@ -81,14 +84,32 @@ const Login = () => {
                 </Flex>
 
                 <Flex flex={1} flexDirection="column" p={50} justifyContent="center">
-                    <Heading align="center" mb={5}>{isLogin ? 'Log In' : 'Create Account'}</Heading>
+                    <Heading align="center" mb={3}>{isLogin ? 'Log In' : 'Create Account'}</Heading>
                     {!isLogin && (
+                        <Flex flexDirection="column">
                         <InputGroup>
                             <InputLeftElement pointerEvents='none' color='gray.500'>
                                 <MdOutlineMail />
                             </InputLeftElement>
                             <Input placeholder="Email" type="email" variant="filled" mb={3} value={email} onChange={(e) => setEmail(e.target.value)} />
                         </InputGroup>
+                    
+                        <InputGroup> 
+                            <InputLeftElement pointerEvents='none' color='gray.500'>
+                                <LuUser />
+                            </InputLeftElement>
+                            <Input placeholder="First Name" type="text" variant="filled" mb={3} value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                        </InputGroup>
+
+                        <InputGroup> 
+                            <InputLeftElement pointerEvents='none' color='gray.500'>
+                                <LuUser />
+                            </InputLeftElement>
+                            <Input placeholder="Last Name" type="text" variant="filled" mb={3} value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                        </InputGroup>
+
+                        </Flex>
+
                     )}
                     <InputGroup>
                         <InputLeftElement pointerEvents='none' color='gray.500'>
@@ -104,7 +125,7 @@ const Login = () => {
                         <Input placeholder="Password" type="password" variant="filled" mb={3} value={password} onChange={(e) => setPassword(e.target.value)} />
                     </InputGroup>
 
-                    <Button bgGradient="linear(to-r, blue.500, blue.600)" color="white" mb={4} onClick={handleSubmit} isLoading={loading}>
+                    <Button bgGradient="linear(to-r, blue.400, blue.600)" color="white" mb={3} onClick={handleSubmit} isLoading={loading}>
                         {isLogin ? 'Log In' : 'Create Account'}
                     </Button>
                     

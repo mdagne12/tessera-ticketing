@@ -5,6 +5,7 @@ import Navbar from './components/Navbar';
 import LoginPage from './pages/LoginPage';
 import EventsPage from './pages/EventsPage';
 import EventDetail from './pages/EventDetail'; 
+import ProfilePage from './pages/ProfilePage';
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
           <Route path="/" element={<Navigate to="/events" replace />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/events/:id" element={<EventDetail />} />
+          <Route path="/profile" element={<ProfilePage />} />
         </Routes>
       </Router>
     </ChakraProvider>
