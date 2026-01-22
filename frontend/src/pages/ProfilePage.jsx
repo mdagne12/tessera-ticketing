@@ -62,7 +62,7 @@ function ProfileCard() {
 
   return (
     <Container maxW="md" py={20}>
-      <Card bgGradient="linear(to-br, blue.400, blue.500)" boxShadow="lg">
+      <Card bgGradient="linear(to-br, blue.500, blue.600)" boxShadow="lg">
         <CardHeader mb={-5} textAlign="center">
           <Avatar
             size="xl"
@@ -70,21 +70,21 @@ function ProfileCard() {
             name={`${profile.first_name} ${profile.last_name}`}
             src={profile.avatar}
             borderWidth={5}
-            borderColor="blue.700"
+            borderColor="blue.300"
           />
-          <Heading size="md">
+          <Heading size="md" color="white">
             {profile.first_name} {profile.last_name}
           </Heading>
-          <Text color="blue.800">@{profile.username}</Text>
+          <Text color="blue.300">@{profile.username}</Text>
 
         </CardHeader>
 
         <CardBody>
           <Stack spacing={3}>
-            <Text>
+            <Text color="white">
               <strong>Email:</strong> {profile.email}
             </Text>
-            <Text>
+            <Text color="white">
               <strong>Username:</strong> {profile.username}
             </Text>
           </Stack>

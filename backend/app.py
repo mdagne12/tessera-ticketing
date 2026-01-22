@@ -118,6 +118,21 @@ def get_events():
         "totalPages": (total_events + limit - 1) // limit
     }), 200
 
+@app.route('/events/<int:event_id>', methods=['GET'])
+def get_event(event_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT * FROM Events WHERE event_id = ?', (event_id,))
+    event = cursor.fetchone()
+
+    conn.close()
+
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+
+    return jsonify(dict(event)), 200
+
 
 @app.route('/user', methods=['POST'])
 def create_user():
@@ -495,7 +510,7 @@ def add_tickets():
         for event_id in range(1, 13):
             tickets = []
             for row in ROWS:
-                for seat in range(1, SEATS_PER_ROW + 1):
+                for seat in range(11, 16):
                     barcode = str(uuid.uuid4())  # unique barcode
                     tickets.append((event_id, row, seat, "AVAILABLE", barcode))
 
@@ -554,7 +569,7 @@ def set_prices(event_id, max_price_dollars):
     cur = conn.cursor()
 
     ROWS = ['A', 'B', 'C', 'D', 'E']
-    PRICE_DECREMENT_CENTS = 2000  # $10.00 decrement per row
+    PRICE_DECREMENT_CENTS = 1000  # $10.00 decrement per row
 
     for i, row in enumerate(ROWS):
         price_cents = max_price_cents - (i * PRICE_DECREMENT_CENTS)
@@ -573,38 +588,91 @@ def set_prices(event_id, max_price_dollars):
     return jsonify({"message": "Prices set successfully"}), 200
 
 
+from datetime import datetime, timedelta, timezone
+
 @app.route('/get_ticket_availability/<int:event_id>', methods=['GET'])
 @jwt_required()
 def get_ticket_availability(event_id):
     conn = get_db_connection()
     cur = conn.cursor()
-
+    
+    # Use UTC time to match SQLite's CURRENT_TIMESTAMP
+    current_time_utc = datetime.now(timezone.utc)
+    one_minute_ago_utc = current_time_utc - timedelta(minutes=1)
+    
+    print(f"[{current_time_utc}] Cleaning up expired reservations for event {event_id}")
+    print(f"Looking for reservations older than: {one_minute_ago_utc}")
+    
+    # Check what expired reservations exist (for debugging)
     cur.execute("""
-        SELECT row_name, seat_number, status
+        SELECT event_id, row_name, seat_number, reservation_time, status,
+               datetime('now') as sqlite_current_time
         FROM Tickets
-        WHERE event_id = ?
+        WHERE status = 'RESERVED'
+        AND reservation_time IS NOT NULL
+        AND event_id = ?
+    """, (event_id,))
+    
+    reserved_tickets = cur.fetchall()
+    print(f"Found {len(reserved_tickets)} reserved tickets for this event:")
+    for ticket in reserved_tickets:
+        print(f"  - Row {ticket['row_name']}, Seat {ticket['seat_number']}")
+        print(f"    Reserved at: {ticket['reservation_time']}")
+        print(f"    SQLite now: {ticket['sqlite_current_time']}")
+    
+    # Unreserve expired ones - let SQLite handle the datetime comparison
+    cur.execute("""
+        UPDATE Tickets
+        SET status = 'AVAILABLE',
+            user_id = NULL,
+            reservation_time = NULL
+        WHERE status = 'RESERVED'
+        AND reservation_time IS NOT NULL
+        AND datetime(reservation_time) < datetime('now', '-1 minute')
+        AND event_id = ?
+    """, (event_id,))
+    
+    rows_updated = cur.rowcount
+    if rows_updated > 0:
+        print(f"✓ Unreserved {rows_updated} expired tickets")
+    else:
+        print(f"No expired tickets to unreserve")
+    
+    conn.commit()
+    
+    # Then fetch the availability
+    cur.execute("""
+        SELECT t.row_name, t.seat_number, t.status, tp.price_cents
+        FROM Tickets t
+        JOIN Ticket_Prices tp ON t.event_id = tp.event_id AND t.row_name = tp.row_name
+        WHERE t.event_id = ?
     """, (event_id,))
 
     event_seats = cur.fetchall()
     conn.close()
 
-    # Build nested dictionary: {row_name: {seat_number: availability}}
+    # Build nested dictionary
     availability_dict = {}
     for seat in event_seats:
         row = seat['row_name']
         seat_num = seat['seat_number']
-        avail = seat['status']  
+        status = seat['status']
+        price_cents = seat['price_cents']
+        price_dollars = price_cents / 100.0
 
         if row not in availability_dict:
             availability_dict[row] = {}
 
-        availability_dict[row][seat_num] = avail
+        availability_dict[row][seat_num] = {
+            'status': status,
+            'price': price_dollars
+        }
 
     return jsonify(availability_dict), 200
 
-@app.route('/reserve_seat/<int:event_id>/<string:row_name>/<int:seat_number>', methods=['PUT'])
+@app.route('/reserve_seat/<int:event_id>/<string:row_name>/<int:seat_number>/<int:user_id>', methods=['PUT'])
 @jwt_required()
-def reserve_seat(event_id, row_name, seat_number):
+def reserve_seat(event_id, row_name, seat_number, user_id):
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -628,7 +696,7 @@ def reserve_seat(event_id, row_name, seat_number):
         conn.close()
         return jsonify({"error": str(e)}), 500
 
-@app.route('/unreserve_seat/<int:event_id>/<string:row_name>/<int:seat_number>', methods=['PUT'])
+@app.route('/unreserve_seat/<int:event_id>/<string:row_name>/<int:seat_number>/<int:user_id>', methods=['PUT'])
 @jwt_required()
 def unreserve_seat(event_id, row_name, seat_number):
     conn = get_db_connection()
@@ -638,7 +706,8 @@ def unreserve_seat(event_id, row_name, seat_number):
         cur.execute("""
             UPDATE Tickets
             SET status = 'AVAILABLE',
-            reservation_time = NULL
+            reservation_time = NULL,
+            user_id = NULL
             WHERE event_id = ? AND row_name = ? AND seat_number = ?
         """, (event_id, row_name, seat_number))
 
